@@ -47,7 +47,7 @@ dropout_pkeep = 1.0    # no dropout
 # load data, either shakespeare, or the Python source of Tensorflow itself
 shakedir = "dickens/*.txt"
 # shakedir = "../tensorflow/**/*.py"
-codetext, valitext, bookranges = txt.read_data_files(shakedir, validation=True)
+codetext, valitext, bookranges = txt.read_data_files(shakedir, validation=False)
 
 # display some stats on the data
 epoch_size = len(codetext) // (BATCHSIZE * SEQLEN)
@@ -72,10 +72,10 @@ Hin = tf.placeholder(tf.float32, [None, INTERNALSIZE*NLAYERS], name='Hin')  # [ 
 # using a NLAYERS=3 layers of GRU cells, unrolled SEQLEN=30 times
 # dynamic_rnn infers SEQLEN from the size of the inputs Xo
 
-onecell = tf.nn.rnn_cell.GRUCell(INTERNALSIZE)
-dropcell = tf.nn.rnn_cell.DropoutWrapper(onecell, input_keep_prob=pkeep)
-multicell = tf.nn.rnn_cell.MultiRNNCell([dropcell]*NLAYERS, state_is_tuple=False)
-multicell = tf.nn.rnn_cell.DropoutWrapper(multicell, output_keep_prob=pkeep)
+onecell = tf.contrib.rnn.GRUCell(INTERNALSIZE)
+dropcell = tf.contrib.rnn.DropoutWrapper(onecell, input_keep_prob=pkeep)
+multicell = tf.contrib.rnn.MultiRNNCell([dropcell]*NLAYERS, state_is_tuple=False)
+multicell = tf.contrib.rnn.DropoutWrapper(multicell, output_keep_prob=pkeep)
 Yr, H = tf.nn.dynamic_rnn(multicell, Xo, dtype=tf.float32, initial_state=Hin)
 # Yr: [ BATCHSIZE, SEQLEN, INTERNALSIZE ]
 # H:  [ BATCHSIZE, INTERNALSIZE*NLAYERS ] # this is the last state in the sequence
@@ -90,7 +90,7 @@ H = tf.identity(H, name='H')  # just to give it a name
 Yflat = tf.reshape(Yr, [-1, INTERNALSIZE])    # [ BATCHSIZE x SEQLEN, INTERNALSIZE ]
 Ylogits = layers.linear(Yflat, ALPHASIZE)     # [ BATCHSIZE x SEQLEN, ALPHASIZE ]
 Yflat_ = tf.reshape(Yo_, [-1, ALPHASIZE])     # [ BATCHSIZE x SEQLEN, ALPHASIZE ]
-loss = tf.nn.softmax_cross_entropy_with_logits(Ylogits, Yflat_)  # [ BATCHSIZE x SEQLEN ]
+loss = tf.nn.softmax_cross_entropy_with_logits(logits=Ylogits, labels=Yflat_)  # [ BATCHSIZE x SEQLEN ]
 loss = tf.reshape(loss, [batchsize, -1])      # [ BATCHSIZE, SEQLEN ]
 Yo = tf.nn.softmax(Ylogits, name='Yo')        # [ BATCHSIZE x SEQLEN, ALPHASIZE ]
 Y = tf.argmax(Yo, 1)                          # [ BATCHSIZE x SEQLEN ]
@@ -131,7 +131,7 @@ sess.run(init)
 step = 0
 
 # training loop
-for x, y_, epoch in txt.rnn_minibatch_sequencer(codetext, BATCHSIZE, SEQLEN, nb_epochs=1000):
+for x, y_, epoch in txt.rnn_minibatch_sequencer(codetext, BATCHSIZE, SEQLEN, nb_epochs=20):
 
     # train on one minibatch
     feed_dict = {X: x, Y_: y_, Hin: istate, lr: learning_rate, pkeep: dropout_pkeep, batchsize: BATCHSIZE}
